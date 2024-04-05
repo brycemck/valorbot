@@ -1,0 +1,17 @@
+{
+  "name": "valorbot",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "child_process": "^1.0.2",
+    "discord.js": "^14.9.0",
+    "dotenv": "^16.0.3"
+  }
+}
