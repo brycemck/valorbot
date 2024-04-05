@@ -20,6 +20,7 @@ module.exports = {
       const that = module.exports;
       that.embeddedMessage.fields = []      
       that.embeddedMessage.fields.push({name: ':CATDANCE:', value: that.process()})
+      // console.log(interaction)
       return interaction.reply({embeds: [that.embeddedMessage]})
     }
   }

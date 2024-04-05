@@ -5,7 +5,7 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] }); // Initiates the client
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers] }); // Initiates the client
 
 // slash commands
 client.commands = new Collection();
@@ -67,6 +67,7 @@ async function loadSlashCommands() {
 // Starts the bot and makes it begin listening for commands.
 client.once(Events.ClientReady, c => {
   console.log(`Ready! Logged in as ${c.user.tag}`);
+  fetchUsers()
 });
 
 client.on(Events.InteractionCreate, async interaction => {
@@ -89,3 +90,43 @@ client.on(Events.InteractionCreate, async interaction => {
 });
 
 client.login(process.env.BOT_TOKEN);
+
+const fetchUsers = async () => {
+  const guild = client.guilds.cache.get(process.env.DISCORD_GUILD_ID);
+  let members = await guild.members.fetch()
+  members.forEach((member) => {
+    if (!member.user.bot) {
+      const userInSavedData = savedData.players.Players.findIndex((player) => player.id == member.user.id)
+      if (userInSavedData == -1) {
+        console.log('new user added to store')
+        let thisUser = Object.assign({}, savedData.players.schema)
+        thisUser.id = member.user.id
+        thisUser.username = member.user.username
+        savedData.players.Players.push(thisUser)
+      }
+    }
+  })
+  savedData.players.save()
+}
+const savedData = {
+  players: {
+    path: 'data/players.json',
+    schema: {
+      id: '',
+      username: ''
+    },
+    updatePlayer: (id, data) => {
+      const thisPlayerIndex = savedData.players.Players.findIndex((player) => player.id == id)
+      console.log(savedData.players.Players[thisPlayerIndex])
+    },
+    save: () => {
+      fs.writeFileSync(savedData.players.path, JSON.stringify(savedData.players.Players))
+    }
+  },
+  init: () => {
+    savedData.players.data = fs.readFileSync(savedData.players.path, {flag: 'as+'})
+    savedData.players.Players = savedData.players.data.length > 0 ? JSON.parse(savedData.players.data) : []
+  }
+}
+
+savedData.init()
