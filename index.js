@@ -67,7 +67,7 @@ async function loadSlashCommands() {
 // Starts the bot and makes it begin listening for commands.
 client.once(Events.ClientReady, c => {
   console.log(`Ready! Logged in as ${c.user.tag}`);
-  fetchUsers()
+  initStores()
 });
 
 client.on(Events.InteractionCreate, async interaction => {
@@ -91,14 +91,14 @@ client.on(Events.InteractionCreate, async interaction => {
 
 client.login(process.env.BOT_TOKEN);
 
-const fetchUsers = async () => {
+const initStores = async () => {
   const guild = client.guilds.cache.get(process.env.DISCORD_GUILD_ID);
+  // get users and add them to players store
   let members = await guild.members.fetch()
   members.forEach((member) => {
     if (!member.user.bot) {
       const userInSavedData = savedData.players.Players.findIndex((player) => player.id == member.user.id)
-      if (userInSavedData == -1) {
-        console.log('new user added to store')
+      if (userInSavedData == -1) { // new user being added to player list
         let thisUser = Object.assign({}, savedData.players.schema)
         thisUser.id = member.user.id
         thisUser.username = member.user.username
