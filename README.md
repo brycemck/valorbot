@@ -14,7 +14,7 @@ DISCORD_APP_ID=0000000000000
 DISCORD_GUILD_ID=000000000000
 BOT_TOKEN=sdfsdfssdfsf.sfsfsf.sdfsdfsdfdf-sdfsfsdfsdf
 ```
-3. Add the bot into your server (ideally a test server to start) by replacing the clientId with the Application ID, then navigating to the link:
+3. Add the bot into your server (ideally a test server to start) by replacing the client_id with the Application ID, then navigating to the link:
 ```
 https://discord.com/oauth2/authorize?client_id=[Guild/Server ID]&permissions=4452018825296&scope=bot
 ```
