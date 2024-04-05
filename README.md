@@ -16,7 +16,7 @@ BOT_TOKEN=sdfsdfssdfsf.sfsfsf.sdfsdfsdfdf-sdfsfsdfsdf
 ```
 3. Add the bot into your server (ideally a test server to start) by replacing the client_id with the Application ID, then navigating to the link:
 ```
-https://discord.com/oauth2/authorize?client_id=[Guild/Server ID]&permissions=4452018825296&scope=bot
+https://discord.com/oauth2/authorize?client_id=[App/Client ID]&permissions=4452018825296&scope=bot
 ```
 4. Install all necessary dependencies by running `npm install` in a terminal window at the root of this project.
 5. Run `npm start` and you should have a running bot!
