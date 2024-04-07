@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { Client, Collection, Events, GatewayIntentBits, Routes, REST, PermissionOverwrites, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ChannelType } = require('discord.js');
+const { Client, Collection, Events, GatewayIntentBits, Routes, REST, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ChannelType, AttachmentBuilder } = require('discord.js');
 const dotenv = require('dotenv');
 dotenv.config();
 
@@ -12,6 +12,8 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 // slash commands
 client.commands = new Collection();
 client.slashCommands = [];
+
+let imagesForMessges = {}
 
 // uncomment the below and replace the ID with the ID of a command you want to delete from the guild
 // (async () => {
@@ -70,6 +72,7 @@ async function loadSlashCommands() {
 client.once(Events.ClientReady, async (c) => {
   console.log(`Ready! Logged in as ${c.user.tag}`);
   await initStores()
+  initImages()
   savedData.init()
 });
 
@@ -113,6 +116,12 @@ const buttonHandler = async (interaction) => {
     } else {
       return interaction.reply({content: `You're already in the queue for #${gameId}, silly.`, ephemeral: true})
     }
+  } else if (action == 'shuffleteams') {
+    savedData.games.shuffleTeams(interaction, gameId)
+    return interaction.reply({content: `Reshuffling the teams!`})
+  } else if (action == 'shufflemap') {
+    savedData.games.shuffleMap(interaction, gameId)
+    return interaction.reply({content: `Reshuffling the map!`})
   }
 } 
 const initStores = async () => {
@@ -132,6 +141,19 @@ const initStores = async () => {
   })
   savedData.players.save()
 }
+const initImages = () => {
+  imagesForMessges.ascent = new AttachmentBuilder('images/ascent.jpg').setName('ascent.jpg')
+  imagesForMessges.bind = new AttachmentBuilder('images/bind.jpg').setName('bind.jpg')
+  imagesForMessges.breeze = new AttachmentBuilder('images/breeze.jpg').setName('breeze.jpg')
+  imagesForMessges.fracture = new AttachmentBuilder('images/fracture.jpg').setName('fracture.jpg')
+  imagesForMessges.haven = new AttachmentBuilder('images/haven.jpg').setName('haven.jpg')
+  imagesForMessges.icebox = new AttachmentBuilder('images/icebox.jpg').setName('icebox.jpg')
+  imagesForMessges.lotus = new AttachmentBuilder('images/lotus.jpg').setName('lotus.jpg')
+  imagesForMessges.pearl = new AttachmentBuilder('images/pearl.jpg').setName('pearl.jpg')
+  imagesForMessges.split = new AttachmentBuilder('images/split.jpg').setName('split.jpg')
+  imagesForMessges.sunset = new AttachmentBuilder('images/sunset.jpg').setName('sunset.jpg')
+}
+
 const savedData = {
   players: {
     path: 'data/players.json',
@@ -158,7 +180,8 @@ const savedData = {
       map: '',
       state: '', // active | completed | queue
       voiceChannelId: '',
-      textChannelId: ''
+      textChannelId: '',
+      gameStartingMessageId: ''
     },
     Games: [],
     save: () => {
@@ -252,12 +275,176 @@ const savedData = {
  
       // start the game once we get a full queue
       if (thisGame.players.length == 3) {
-        savedData.games.startGame(thisGame)
+        savedData.games.startGame(interaction, thisGame)
       }
       savedData.games.save()
     },
-    startGame: (thisGame) => {
+    randomizeTeams: (players) => {
+      let currentIndex = players.length;
+      // While there remain elements to shuffle...
+      while (currentIndex != 0) {
+        // Pick a remaining element...
+        let randomIndex = Math.floor(Math.random() * currentIndex);
+        currentIndex--;
+
+        // And swap it with the current element.
+        [players[currentIndex], players[randomIndex]] = [
+          players[randomIndex], players[currentIndex]];
+      }
+    },
+    randomMap: () => {
+      let mapPool = ['Ascent', 'Bind', 'Breeze', 'Fracture', 'Haven', 'Icebox', 'Lotus', 'Pearl', 'Split', 'Sunset']
+      return mapPool[Math.floor(Math.random() * mapPool.length)];
+    },
+    shuffleMap: async (interaction, gameId) => {
+      const thisGameIndex = savedData.games.Games.findIndex(game => game.cleanId == gameId);
+      const thisGame = savedData.games.Games[thisGameIndex]
+
+      thisGame.map = savedData.games.randomMap()
+      const gameReadyMessage = await interaction.channel.messages.fetch(thisGame.gameStartingMessageId)
+      let editedMessage = await savedData.games.gameReadyMessage(thisGame, `Attackers: ${thisGame.attackerNames}\nDefenders: ${thisGame.defenderNames}\nMap: ${thisGame.map}`)
+      gameReadyMessage.edit(editedMessage)
+    },
+    shuffleTeams: async (interaction, gameId) => {
+      const thisGameIndex = savedData.games.Games.findIndex(game => game.cleanId == gameId);
+      const thisGame = savedData.games.Games[thisGameIndex]
+
+      savedData.games.randomizeTeams(thisGame.players)
+      thisGame.defenders = []
+      thisGame.attackers = []
+      let halfOfPlayers = Math.floor(thisGame.players.length / 2);
+      let i = 0;
+      while (i <= halfOfPlayers) { // first half
+        thisGame.attackers.push(thisGame.players[i])
+        i++
+      }
+      while (i < thisGame.players.length) { // second half
+        thisGame.defenders.push(thisGame.players[i])
+        i++
+      }
+      let attackersNames = ''
+      let defendersNames = ''
+      thisGame.attackers.forEach(id => { // list attacker usernames
+        const foundPlayerIndex = savedData.players.Players.findIndex(player => player.id == id);
+        attackersNames += `${savedData.players.Players[foundPlayerIndex].username}, `
+      })
+      thisGame.defenders.forEach(id => { // list defender usernames
+        const foundPlayerIndex = savedData.players.Players.findIndex(player => player.id == id);
+        defendersNames += `${savedData.players.Players[foundPlayerIndex].username}, `
+      })
+      thisGame.attackerNames = attackersNames
+      thisGame.defenderNames = defendersNames
+      const gameReadyMessage = await interaction.channel.messages.fetch(thisGame.gameStartingMessageId)
+      let editedMessage = await savedData.games.gameReadyMessage(thisGame, `Attackers: ${attackersNames}\nDefenders: ${defendersNames}\nMap: ${thisGame.map}`)
+      gameReadyMessage.edit(editedMessage)
+    },
+    gameReadyMessage: async (thisGame) => {
+      let message = {}
+      let embeddedMessage = {}
+      if (thisGame.map !== '') {
+        // create buttons for confirm, reshuffle teams and reshuffle map
+        const confirmGameButton = new ButtonBuilder()
+            .setCustomId(`confirm-${thisGame.cleanId}`)
+            .setLabel('Confirm & Start Game')
+            .setStyle(1)
+        const reshuffleTeamsButton = new ButtonBuilder()
+            .setCustomId(`shuffleteams-${thisGame.cleanId}`)
+            .setLabel('Re-shuffle Teams')
+            .setStyle(1)
+        const reshuffleMapButton = new ButtonBuilder()
+            .setCustomId(`shufflemap-${thisGame.cleanId}`)
+            .setLabel('Re-shuffle Map')
+            .setStyle(1)
+        const row = new ActionRowBuilder().addComponents(confirmGameButton, reshuffleTeamsButton, reshuffleMapButton)
+        message.components = [row]
+        embeddedMessage.image = {}
+
+        if (thisGame.map == 'Ascent') {
+          embeddedMessage.image.url = 'attachment://ascent.jpg'
+          message.files = [imagesForMessges.ascent]
+        } else if (thisGame.map == 'Bind') {
+          embeddedMessage.image.url = 'attachment://bind.jpg'
+          message.files = [imagesForMessges.bind]
+        } else if (thisGame.map == 'Breeze') {
+          embeddedMessage.image.url = 'attachment://breeze.jpg'
+          message.files = [imagesForMessges.breeze]
+        } else if (thisGame.map == 'Fracture') {
+          embeddedMessage.image.url = 'attachment://fracture.jpg'
+          message.files = [imagesForMessges.fracture]
+        } else if (thisGame.map == 'Haven') {
+          embeddedMessage.image.url = 'attachment://haven.jpg'
+          message.files = [imagesForMessges.haven]
+        } else if (thisGame.map == 'Icebox') {
+          embeddedMessage.image.url = 'attachment://icebox.jpg'
+          message.files = [imagesForMessges.icebox]
+        } else if (thisGame.map == 'Lotus') {
+          embeddedMessage.image.url = 'attachment://lotus.jpg'
+          message.files = [imagesForMessges.lotus]
+        } else if (thisGame.map == 'Pearl') {
+          embeddedMessage.image.url = 'attachment://pearl.jpg'
+          message.files = [imagesForMessges.pearl]
+        } else if (thisGame.map == 'Split') {
+          embeddedMessage.image.url = 'attachment://split.jpg'
+          message.files = [imagesForMessges.split]
+        } else if (thisGame.map == 'Sunset') {
+          embeddedMessage.image.url = 'attachment://sunset.jpg'
+          message.files = [imagesForMessges.sunset]
+        }
+        embeddedMessage.fields = [
+          { name: 'Map', value: `${thisGame.map}` },
+          { name: 'Defenders', value: `${thisGame.defenderNames}`, inline: true },
+          { name: 'Attackers', value: `${thisGame.attackerNames}`, inline: true }
+        ]
+      } else {
+        embeddedMessage.fields = [{ name: 'Starting soon', value: `Game has reached ${thisGame.players.length} players! Starting game...` }]
+      }
+      embeddedMessage.title = 'Game is ready!'
+      message.embeds = [embeddedMessage]
+      
+      return message
+    },
+    startGame: async (interaction, thisGame) => {
+      const queueTextChannel = await interaction.guild.channels.fetch(thisGame.textChannelId)
       console.log('starting game!!!!')
+      let newMessage = await savedData.games.gameReadyMessage(thisGame)
+      
+      const gameStartingMessage = await queueTextChannel.send(newMessage)
+      thisGame.gameStartingMessageId = gameStartingMessage.id
+      
+      // randomize teams
+      savedData.games.randomizeTeams(thisGame.players)
+      // assign attackers and defenders
+      let halfOfPlayers = Math.floor(thisGame.players.length / 2);
+      let i = 0;
+      while (i <= halfOfPlayers) { // first half
+        thisGame.attackers.push(thisGame.players[i])
+        i++
+      }
+      while (i < thisGame.players.length) { // second half
+        thisGame.defenders.push(thisGame.players[i])
+        i++
+      }
+      // set random map
+      thisGame.map = savedData.games.randomMap()
+
+      // wait 5 seconds and then display game info (map, attackers/defenders) and buttons
+      await new Promise(resolve => setTimeout(resolve, 5000)) // wait 5 seconds to build suspense
+
+      let attackersNames = ''
+      let defendersNames = ''
+      thisGame.attackers.forEach(id => { // list attacker usernames
+        const foundPlayerIndex = savedData.players.Players.findIndex(player => player.id == id);
+        attackersNames += `${savedData.players.Players[foundPlayerIndex].username}, `
+      })
+      thisGame.defenders.forEach(id => { // list defender usernames
+        const foundPlayerIndex = savedData.players.Players.findIndex(player => player.id == id);
+        defendersNames += `${savedData.players.Players[foundPlayerIndex].username}, `
+      })
+      thisGame.attackerNames = attackersNames
+      thisGame.defenderNames = defendersNames
+      let updatedMessage = await savedData.games.gameReadyMessage(thisGame)
+
+      await gameStartingMessage.edit(updatedMessage)
     }
   },
   init: () => {
