@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { Client, Collection, Events, GatewayIntentBits, Routes, REST, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ChannelType, AttachmentBuilder } = require('discord.js');
+const { Client, Collection, Events, GatewayIntentBits, Routes, REST, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ChannelType, AttachmentBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder } = require('discord.js');
 const dotenv = require('dotenv');
 dotenv.config();
 
@@ -95,6 +95,8 @@ client.on(Events.InteractionCreate, async interaction => {
     }
   } else if (interaction.isButton()) {
     await buttonHandler(interaction)
+  } else if (interaction.isModalSubmit()) {
+    await modalInputHandler(interaction)
   }
 });
 
@@ -122,8 +124,43 @@ const buttonHandler = async (interaction) => {
   } else if (action == 'shufflemap') {
     savedData.games.shuffleMap(interaction, gameId)
     return interaction.reply({content: `Reshuffling the map!`})
+  } else if (action == 'init') {
+    savedData.games.startGame(interaction, thisGame)
+    return interaction.reply({content: `Initializing the game...`})
+  } else if (action == 'cancel') {
+    savedData.games.cancelGame(interaction, gameId)
+    return interaction.reply({content: `Cancelling the game! Byeeeeeee`})
+  } else if (action == 'confirm') {
+    savedData.games.confirmGame(interaction, gameId)
+    return interaction.reply({content: `Confirmed game, stand by`})
+  } else if (action == 'complete') {
+    return savedData.games.completeGame(interaction, gameId)
+    // return interaction.reply({content: `Game marked as completed!`})
+  } else {
+    interaction.reply({content: `There isn't a response configured for this kind of interaction.`})
+    console.log(action)
   }
-} 
+}
+const modalInputHandler = (interaction) => {
+  const modalId = interaction.customId.split('-')
+  const type = modalId[0]
+  const gameId = modalId[1]
+  const thisGameIndex = savedData.games.Games.findIndex(game => game.cleanId == gameId);
+  const thisGame = savedData.games.Games[thisGameIndex]
+
+  const attackerScoreInput = interaction.fields.getTextInputValue(`attackerscore-${gameId}`)
+  const defenderScoreInput = interaction.fields.getTextInputValue(`defenderscore-${gameId}`)
+
+  thisGame.score = {}
+  thisGame.score.attackers = attackerScoreInput
+  thisGame.score.defenders = defenderScoreInput
+
+  savedData.games.save()
+
+  interaction.reply({content: `Attackers: ${thisGame.score.attackers}\nDefenders: ${thisGame.score.defenders}\nGGWP`})
+
+  savedData.games.initiateSelfDestructSequence(interaction, thisGame)
+}
 const initStores = async () => {
   const guild = client.guilds.cache.get(process.env.DISCORD_GUILD_ID);
   // get users and add them to players store
@@ -178,7 +215,7 @@ const savedData = {
       defenders: [],
       attackers: [],
       map: '',
-      state: '', // active | completed | queue
+      state: '', // active | completed | queue | cancelled
       voiceChannelId: '',
       textChannelId: '',
       gameStartingMessageId: ''
@@ -196,7 +233,7 @@ const savedData = {
       }
     },
     generateId: () => {
-      return [crypto.randomUUID(), `${Math.floor(Math.random() * 10)}${Math.floor(Math.random() * 10)}${Math.floor(Math.random() * 10)}`]
+      return [crypto.randomUUID(), `${Math.floor(Math.random() * 10)}${Math.floor(Math.random() * 10)}${Math.floor(Math.random() * 10)}${Math.floor(Math.random() * 10)}${Math.floor(Math.random() * 10)}`]
     },
     newQueue: async (interaction) => {
       let thisQueue = Object.assign({}, savedData.games.schema)
@@ -206,6 +243,10 @@ const savedData = {
       thisQueue.cleanId = newId[1]
       thisQueue.timestamp = Date.now()
       thisQueue.state = 'queue'
+      thisQueue.channelStartedFromId = interaction.channel.id
+      thisQueue.players = []
+      thisQueue.defenders = []
+      thisQueue.attackers = []
 
       try {
         const newTextChannel = await interaction.channel.parent.children.create({
@@ -226,15 +267,15 @@ const savedData = {
         })
         thisQueue.voiceChannelId = newVoiceChannel.id
         thisQueue.textChannelId = newTextChannel.id
+
+        const queueStartedMessage = await savedData.games.queueStartedMessage(thisQueue)
+        newTextChannel.send(queueStartedMessage)
       } catch (error) {
 
       }
 
       savedData.games.Games.push(thisQueue)
       savedData.games.save()
-
-      // add player to the queue
-      savedData.games.addPlayerToQueue(interaction, thisQueue.cleanId)
 
       // send message to Queues channel with new queue
       const queueJoiner = new ButtonBuilder()
@@ -249,10 +290,13 @@ const savedData = {
       const queueOpenedMessage = await interaction.channel.send({embeds: [embeddedMessage], components: [row]})
       thisQueue.queueMessageId = queueOpenedMessage.id
       
+      // add player to the queue
+      savedData.games.addPlayerToQueue(interaction, thisQueue.cleanId)
+
       return thisQueue
     },
     addPlayerToQueue: async (interaction, id) => {
-      console.log(`adding ${interaction.user.username} to queue ${id}`)
+      // console.log(`adding ${interaction.user.username} to queue ${id}`)
       const thisGameIndex = savedData.games.Games.findIndex(game => game.cleanId == id);
       const thisGame = savedData.games.Games[thisGameIndex]
 
@@ -272,9 +316,21 @@ const savedData = {
       let embeddedMessage = {}
       embeddedMessage.fields = [{name: `Queue`, value: `Player <@${interaction.user.id}> has joined the queue!`}]
       queueTextChannel.send({embeds: [embeddedMessage]})
- 
+
+      // update initial 'queue started' message with members in queue
+      const queueStartedMessage = await interaction.channel.messages.fetch(thisGame.queueMessageId)
+
+      let listedPlayers = ''
+      thisGame.players.forEach(player => {
+        listedPlayers += `<@${player}>, `
+      })
+      
+      embeddedMessage = {}
+      embeddedMessage.fields = [{name: `Queue #${thisGame.cleanId} opened!`, value: `Currently in queue:\n${listedPlayers}`}]
+      queueStartedMessage.edit({embeds: [embeddedMessage]})
+
       // start the game once we get a full queue
-      if (thisGame.players.length == 3) {
+      if (thisGame.players.length == 10) {
         savedData.games.startGame(interaction, thisGame)
       }
       savedData.games.save()
@@ -302,7 +358,7 @@ const savedData = {
 
       thisGame.map = savedData.games.randomMap()
       const gameReadyMessage = await interaction.channel.messages.fetch(thisGame.gameStartingMessageId)
-      let editedMessage = await savedData.games.gameReadyMessage(thisGame, `Attackers: ${thisGame.attackerNames}\nDefenders: ${thisGame.defenderNames}\nMap: ${thisGame.map}`)
+      let editedMessage = await savedData.games.gameReadyMessage(thisGame)
       gameReadyMessage.edit(editedMessage)
     },
     shuffleTeams: async (interaction, gameId) => {
@@ -314,7 +370,7 @@ const savedData = {
       thisGame.attackers = []
       let halfOfPlayers = Math.floor(thisGame.players.length / 2);
       let i = 0;
-      while (i <= halfOfPlayers) { // first half
+      while (i < halfOfPlayers) { // first half
         thisGame.attackers.push(thisGame.players[i])
         i++
       }
@@ -334,28 +390,47 @@ const savedData = {
       })
       thisGame.attackerNames = attackersNames
       thisGame.defenderNames = defendersNames
+      
+      savedData.games.save()
       const gameReadyMessage = await interaction.channel.messages.fetch(thisGame.gameStartingMessageId)
-      let editedMessage = await savedData.games.gameReadyMessage(thisGame, `Attackers: ${attackersNames}\nDefenders: ${defendersNames}\nMap: ${thisGame.map}`)
+      let editedMessage = await savedData.games.gameReadyMessage(thisGame)
       gameReadyMessage.edit(editedMessage)
     },
-    gameReadyMessage: async (thisGame) => {
+    gameReadyMessage: async (thisGame, confirmed) => {
       let message = {}
       let embeddedMessage = {}
       if (thisGame.map !== '') {
-        // create buttons for confirm, reshuffle teams and reshuffle map
-        const confirmGameButton = new ButtonBuilder()
-            .setCustomId(`confirm-${thisGame.cleanId}`)
-            .setLabel('Confirm & Start Game')
-            .setStyle(1)
-        const reshuffleTeamsButton = new ButtonBuilder()
-            .setCustomId(`shuffleteams-${thisGame.cleanId}`)
-            .setLabel('Re-shuffle Teams')
-            .setStyle(1)
-        const reshuffleMapButton = new ButtonBuilder()
-            .setCustomId(`shufflemap-${thisGame.cleanId}`)
-            .setLabel('Re-shuffle Map')
-            .setStyle(1)
-        const row = new ActionRowBuilder().addComponents(confirmGameButton, reshuffleTeamsButton, reshuffleMapButton)
+        const row = new ActionRowBuilder()
+        if (!confirmed) {
+          // create buttons for confirm, reshuffle teams and reshuffle map
+          const confirmGameButton = new ButtonBuilder()
+              .setCustomId(`confirm-${thisGame.cleanId}`)
+              .setLabel('Confirm & Start Game')
+              .setStyle(3)
+          const reshuffleTeamsButton = new ButtonBuilder()
+              .setCustomId(`shuffleteams-${thisGame.cleanId}`)
+              .setLabel('Re-shuffle Teams')
+              .setStyle(2)
+          const reshuffleMapButton = new ButtonBuilder()
+              .setCustomId(`shufflemap-${thisGame.cleanId}`)
+              .setLabel('Re-shuffle Map')
+              .setStyle(2)
+          const cancelGameButton = new ButtonBuilder()
+              .setCustomId(`cancel-${thisGame.cleanId}`)
+              .setLabel('Cancel Game')
+              .setStyle(4)
+          row.addComponents(confirmGameButton, reshuffleTeamsButton, reshuffleMapButton, cancelGameButton) 
+        } else {
+          const completeGameButton = new ButtonBuilder()
+              .setCustomId(`complete-${thisGame.cleanId}`)
+              .setLabel('Complete Game')
+              .setStyle(3)
+          const cancelGameButton = new ButtonBuilder()
+              .setCustomId(`cancel-${thisGame.cleanId}`)
+              .setLabel('Cancel Game')
+              .setStyle(4)
+          row.addComponents(completeGameButton, cancelGameButton)
+        }
         message.components = [row]
         embeddedMessage.image = {}
 
@@ -403,9 +478,28 @@ const savedData = {
       
       return message
     },
+    queueStartedMessage: async (thisGame) => {
+      let message = {}
+      let embeddedMessage = {}
+      
+      const startGameButton = new ButtonBuilder()
+          .setCustomId(`init-${thisGame.cleanId}`)
+          .setLabel('Initialize Game')
+          .setStyle(1)
+      const cancelGameButton = new ButtonBuilder()
+          .setCustomId(`cancel-${thisGame.cleanId}`)
+          .setLabel('Cancel Game')
+          .setStyle(4)
+      const row = new ActionRowBuilder().addComponents(startGameButton, cancelGameButton)
+      message.components = [row]
+      embeddedMessage.title = "Queue has started!"
+      embeddedMessage.fields = [{ name: '', value: 'Come back here to start or cancel the game. The game will be initialized automatically when there are 10 people in queue.' }]
+      message.embeds = [embeddedMessage]
+      
+      return message
+    },
     startGame: async (interaction, thisGame) => {
       const queueTextChannel = await interaction.guild.channels.fetch(thisGame.textChannelId)
-      console.log('starting game!!!!')
       let newMessage = await savedData.games.gameReadyMessage(thisGame)
       
       const gameStartingMessage = await queueTextChannel.send(newMessage)
@@ -416,7 +510,7 @@ const savedData = {
       // assign attackers and defenders
       let halfOfPlayers = Math.floor(thisGame.players.length / 2);
       let i = 0;
-      while (i <= halfOfPlayers) { // first half
+      while (i < halfOfPlayers) { // first half
         thisGame.attackers.push(thisGame.players[i])
         i++
       }
@@ -444,7 +538,79 @@ const savedData = {
       thisGame.defenderNames = defendersNames
       let updatedMessage = await savedData.games.gameReadyMessage(thisGame)
 
+      savedData.games.save()
+
       await gameStartingMessage.edit(updatedMessage)
+    },
+    cancelGame: async (interaction, gameId) => {
+      const thisGameIndex = savedData.games.Games.findIndex(game => game.cleanId == gameId);
+      const thisGame = savedData.games.Games[thisGameIndex]
+
+      thisGame.state = 'cancelled'
+      const queueMessageChannel = await interaction.guild.channels.fetch(thisGame.channelStartedFromId)
+      const queueStartedMessage = await queueMessageChannel.messages.fetch(thisGame.queueMessageId);
+      let embeddedMessage = {}
+      embeddedMessage.fields = [{name: `Queue #${thisGame.cleanId} is closed`, value: `*we'll get em next time*`}]
+      queueStartedMessage.edit({embeds: [embeddedMessage], components: []})
+
+      savedData.games.save()
+      savedData.games.initiateSelfDestructSequence(interaction, thisGame)
+    },
+    confirmGame: async (interaction, gameId) => {
+      const thisGameIndex = savedData.games.Games.findIndex(game => game.cleanId == gameId);
+      const thisGame = savedData.games.Games[thisGameIndex]
+
+      thisGame.state = 'active'
+      const queueTextChannel = await interaction.guild.channels.fetch(thisGame.textChannelId)
+      const gameReadyMessage = await savedData.games.gameReadyMessage(thisGame, true)
+      gameReadyMessage.embeds[0].title = `HERE'S YOUR GAME!`
+      gameReadyMessage.embeds[0].fields.push({ name: 'No takebacksies!', value: `Don't forget to come back after the game is done to mark it as completed!` })
+      queueTextChannel.send(gameReadyMessage)
+
+      const queueMessageChannel = await interaction.guild.channels.fetch(thisGame.channelStartedFromId)
+      const queueStartedMessage = await queueMessageChannel.messages.fetch(thisGame.queueMessageId);
+      let embeddedMessage = {}
+      embeddedMessage.fields = [{name: `Queue #${thisGame.cleanId} is closed`, value: `*we'll get em next time*`}]
+      queueStartedMessage.edit({embeds: [embeddedMessage], components: []})
+
+      savedData.games.save()
+    },
+    completeGame: async (interaction, gameId) => {
+      const thisGameIndex = savedData.games.Games.findIndex(game => game.cleanId == gameId);
+      const thisGame = savedData.games.Games[thisGameIndex]
+
+      thisGame.state = 'complete'
+      savedData.games.save()
+
+      const modal = new ModalBuilder().setCustomId(`modal-${gameId}`).setTitle('Game scoring information')
+      const attackerScoreRow = new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(`attackerscore-${gameId}`).setLabel('Attacker score').setStyle(1))
+      const defenderScoreRow = new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(`defenderscore-${gameId}`).setLabel('Defender score').setStyle(1))
+
+      modal.addComponents(attackerScoreRow, defenderScoreRow)
+      await interaction.showModal(modal)
+    },
+    initiateSelfDestructSequence: async (interaction, thisGame) => {
+      let selfDestructCountdown = 5;
+      let embeddedMessage = {}
+      embeddedMessage.fields = [{name: `Queue #${thisGame.cleanId} is a goner.`, value: `This channel, along with its associated voice chat, will self destruct in ${selfDestructCountdown} seconds. Byeeeeeee`}]
+      try {
+        const queueTextChannel = await interaction.guild.channels.fetch(thisGame.textChannelId)
+        const queueVoiceChannel = await interaction.guild.channels.fetch(thisGame.voiceChannelId)
+        const selfDestructMessage = await queueTextChannel.send({embeds: [embeddedMessage]})
+        while (selfDestructCountdown > 0) {
+          selfDestructCountdown--
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          embeddedMessage.fields[0].value = `This channel, along with its associated voice chat, will self destruct in ${selfDestructCountdown} seconds. Byeeeeeee`
+          selfDestructMessage.edit({embeds: [embeddedMessage]})
+          if (selfDestructCountdown == 0) {
+            await new Promise(resolve => setTimeout(resolve, 2000)) // have to wait a couple seconds otherwise it gets angy
+            queueTextChannel.delete()
+            queueVoiceChannel.delete()
+          }
+        }
+      } catch(error) {
+
+      }
     }
   },
   init: () => {
