@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { Client, Collection, Events, GatewayIntentBits, Routes, REST, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ChannelType, AttachmentBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder } = require('discord.js');
+const { Client, Collection, Events, GatewayIntentBits, Routes, REST, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ChannelType, AttachmentBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ModalBuilder, TextInputBuilder, CommandInteractionOptionResolver } = require('discord.js');
 const dotenv = require('dotenv');
 dotenv.config();
 
@@ -309,8 +309,14 @@ const savedData = {
       const queueVoiceChannel = await interaction.guild.channels.fetch(thisGame.voiceChannelId)
       
       // add permissions to both cnhannels
-      queueTextChannel.permissionOverwrites.edit(interaction.user.id, {'ViewChannel': true})
-      queueVoiceChannel.permissionOverwrites.edit(interaction.user.id, {'ViewChannel': true})
+      try {
+        queueTextChannel.permissionOverwrites.edit(interaction.user.id, {'ViewChannel': true})
+        queueVoiceChannel.permissionOverwrites.edit(interaction.user.id, {'ViewChannel': true})
+      } catch (error) {
+        interaction.reply({content: `Something went wrong, please try again.`, ephemeral: true})
+        console.log('error when trying to change channel permissions')
+        console.log(error)
+      }
 
       // send message to text channel that player joined
       let embeddedMessage = {}
@@ -609,7 +615,7 @@ const savedData = {
           }
         }
       } catch(error) {
-
+        console.log(error)
       }
     }
   },
