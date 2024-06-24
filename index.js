@@ -440,7 +440,7 @@ const savedData = {
         }
         message.components = [row]
         embeddedMessage.image = {}
-
+         // comment
         if (thisGame.map == 'Ascent') {
           embeddedMessage.image.url = 'attachment://ascent.jpg'
           message.files = [imagesForMessges.ascent]
