@@ -444,7 +444,7 @@ const savedData = {
         if (thisGame.map == 'Ascent') {
           embeddedMessage.image.url = 'attachment://ascent.jpg'
           message.files = [imagesForMessges.ascent]
-        } else if (thisGame.map == 'abyss') {
+        } else if (thisGame.map == 'Abyss') {
           embeddedMessage.image.url = 'attachment://abyss.jpg'
           message.files = [imagesForMessges.abyss]
         } else if (thisGame.map == 'Bind') {
