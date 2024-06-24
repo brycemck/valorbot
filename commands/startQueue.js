@@ -12,9 +12,6 @@ module.exports = {
     title: 'VALORBOT',
     fields: []
   },
-  process: () => {
-    return 'The bot is working! Congrats brotha'
-  },
   SlashCommand: {
     run: async (client, interaction, data) => {
       const that = module.exports;

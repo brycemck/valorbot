@@ -179,6 +179,7 @@ const initStores = async () => {
   savedData.players.save()
 }
 const initImages = () => {
+  imagesForMessges.abyss = new AttachmentBuilder('images/abyss.jpg').setName('abyss.jpg')
   imagesForMessges.ascent = new AttachmentBuilder('images/ascent.jpg').setName('ascent.jpg')
   imagesForMessges.bind = new AttachmentBuilder('images/bind.jpg').setName('bind.jpg')
   imagesForMessges.breeze = new AttachmentBuilder('images/breeze.jpg').setName('breeze.jpg')
@@ -250,7 +251,7 @@ const savedData = {
 
       try {
         const newTextChannel = await interaction.channel.parent.children.create({
-          name: `queue-${thisQueue.cleanId}`,
+          name: `${thisQueue.cleanId}-queue`,
           type: ChannelType.GuildText,
           permissionOverwrites: [
             {type: 'member', id: client.user.id, allow: [PermissionFlagsBits.ViewChannel]}, // add Valorbot to the channel so it can manage it
@@ -258,7 +259,7 @@ const savedData = {
           ]
         })
         const newVoiceChannel = await interaction.channel.parent.children.create({
-          name: `queue-${thisQueue.cleanId}`,
+          name: `${thisQueue.cleanId}-queue`,
           type: ChannelType.GuildVoice,
           permissionOverwrites: [
             {type: 'member', id: client.user.id, allow: [PermissionFlagsBits.ViewChannel]}, // add Valorbot to the channel so it can manage it
@@ -355,7 +356,7 @@ const savedData = {
       }
     },
     randomMap: () => {
-      let mapPool = ['Ascent', 'Bind', 'Breeze', 'Fracture', 'Haven', 'Icebox', 'Lotus', 'Pearl', 'Split', 'Sunset']
+      let mapPool = ['Abyss', 'Ascent', 'Bind', 'Breeze', 'Fracture', 'Haven', 'Icebox', 'Lotus', 'Pearl', 'Split', 'Sunset']
       return mapPool[Math.floor(Math.random() * mapPool.length)];
     },
     shuffleMap: async (interaction, gameId) => {
@@ -443,6 +444,9 @@ const savedData = {
         if (thisGame.map == 'Ascent') {
           embeddedMessage.image.url = 'attachment://ascent.jpg'
           message.files = [imagesForMessges.ascent]
+        } else if (thisGame.map == 'abyss') {
+          embeddedMessage.image.url = 'attachment://abyss.jpg'
+          message.files = [imagesForMessges.abyss]
         } else if (thisGame.map == 'Bind') {
           embeddedMessage.image.url = 'attachment://bind.jpg'
           message.files = [imagesForMessges.bind]
