@@ -439,7 +439,7 @@ const savedData = {
           row.addComponents(completeGameButton, cancelGameButton)
         }
         message.components = [row]
-        embeddedMessage.image = {}
+        embeddedMessage.image = {} 
          // comment
         if (thisGame.map == 'Ascent') {
           embeddedMessage.image.url = 'attachment://ascent.jpg'
