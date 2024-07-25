@@ -258,15 +258,15 @@ const savedData = {
             {type: 'role', id: interaction.guild.roles.everyone, deny: [PermissionFlagsBits.ViewChannel]} // deny @everyone
           ]
         })
-        const newVoiceChannel = await interaction.channel.parent.children.create({
-          name: `${thisQueue.cleanId}-queue`,
-          type: ChannelType.GuildVoice,
-          permissionOverwrites: [
-            {type: 'member', id: client.user.id, allow: [PermissionFlagsBits.ViewChannel]}, // add Valorbot to the channel so it can manage it
-            {type: 'role', id: interaction.guild.roles.everyone, deny: [PermissionFlagsBits.ViewChannel]} // deny @everyone
-          ]
-        })
-        thisQueue.voiceChannelId = newVoiceChannel.id
+        // const newVoiceChannel = await interaction.channel.parent.children.create({
+        //   name: `${thisQueue.cleanId}-queue`,
+        //   type: ChannelType.GuildVoice,
+        //   permissionOverwrites: [
+        //     {type: 'member', id: client.user.id, allow: [PermissionFlagsBits.ViewChannel]}, // add Valorbot to the channel so it can manage it
+        //     {type: 'role', id: interaction.guild.roles.everyone, deny: [PermissionFlagsBits.ViewChannel]} // deny @everyone
+        //   ]
+        // })
+        // thisQueue.voiceChannelId = newVoiceChannel.id
         thisQueue.textChannelId = newTextChannel.id
 
         const queueStartedMessage = await savedData.games.queueStartedMessage(thisQueue)
@@ -289,6 +289,7 @@ const savedData = {
       let embeddedMessage = {}
       embeddedMessage.fields = [{name: `Queue #${thisQueue.cleanId} opened!`, value: ''}]
       const queueOpenedMessage = await interaction.channel.send({embeds: [embeddedMessage], components: [row]})
+      interaction.channel.send(`-# <@&1265802933560410173>, now's your time!`)
       thisQueue.queueMessageId = queueOpenedMessage.id
       
       // add player to the queue
@@ -307,12 +308,12 @@ const savedData = {
       // get text and voice channels for this queue
       interaction.guild.channels.fetch()
       const queueTextChannel = await interaction.guild.channels.fetch(thisGame.textChannelId)
-      const queueVoiceChannel = await interaction.guild.channels.fetch(thisGame.voiceChannelId)
+      // const queueVoiceChannel = await interaction.guild.channels.fetch(thisGame.voiceChannelId)
       
       // add permissions to both cnhannels
       try {
         queueTextChannel.permissionOverwrites.edit(interaction.user.id, {'ViewChannel': true})
-        queueVoiceChannel.permissionOverwrites.edit(interaction.user.id, {'ViewChannel': true})
+        // queueVoiceChannel.permissionOverwrites.edit(interaction.user.id, {'ViewChannel': true})
       } catch (error) {
         interaction.reply({content: `Something went wrong, please try again.`, ephemeral: true})
         console.log('error when trying to change channel permissions')
@@ -605,7 +606,7 @@ const savedData = {
       embeddedMessage.fields = [{name: `Queue #${thisGame.cleanId} is a goner.`, value: `This channel, along with its associated voice chat, will self destruct in ${selfDestructCountdown} seconds. Byeeeeeee`}]
       try {
         const queueTextChannel = await interaction.guild.channels.fetch(thisGame.textChannelId)
-        const queueVoiceChannel = await interaction.guild.channels.fetch(thisGame.voiceChannelId)
+        // const queueVoiceChannel = await interaction.guild.channels.fetch(thisGame.voiceChannelId)
         const selfDestructMessage = await queueTextChannel.send({embeds: [embeddedMessage]})
         while (selfDestructCountdown > 0) {
           selfDestructCountdown--
@@ -615,7 +616,7 @@ const savedData = {
           if (selfDestructCountdown == 0) {
             await new Promise(resolve => setTimeout(resolve, 2000)) // have to wait a couple seconds otherwise it gets angy
             queueTextChannel.delete()
-            queueVoiceChannel.delete()
+            // queueVoiceChannel.delete()
           }
         }
       } catch(error) {
